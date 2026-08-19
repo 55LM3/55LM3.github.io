@@ -1,0 +1,355 @@
+from pathlib import Path
+
+html = r'''<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>3D → Roblox Parts JSON</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#0e1014;color:#eee;font:14px system-ui}
+header{padding:15px 18px;border-bottom:1px solid #292d35}h1{margin:0;font-size:20px}
+main{display:grid;grid-template-columns:320px 1fr;height:calc(100vh - 65px)}
+aside{padding:15px;border-right:1px solid #292d35;overflow:auto}
+#view{position:relative;min-width:0}canvas{display:block;width:100%;height:100%}
+label{display:block;margin:10px 0 5px;color:#c7ccd5;font-size:13px}
+input,select,button,textarea{width:100%;padding:9px;border:1px solid #363b46;border-radius:7px;background:#171a20;color:#eee}
+button{cursor:pointer;margin-top:8px}button.primary{background:#315bdc;border-color:#315bdc}
+.drop{border:2px dashed #3b414d;border-radius:9px;padding:22px;text-align:center;color:#aeb5c0;cursor:pointer}
+.check{display:flex;align-items:center;gap:7px}.check input{width:auto}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+#out{position:absolute;left:12px;right:12px;bottom:12px;height:220px;background:#101217cc}
+textarea{height:100%;resize:none;font:12px monospace}
+#status{color:#aab1bd;font-size:12px;margin-top:8px;line-height:1.4}
+@media(max-width:800px){main{grid-template-columns:1fr;height:auto}aside{border-right:0;border-bottom:1px solid #292d35}#view{height:70vh}}
+</style>
+</head>
+<body>
+<header><h1>3D Model → Roblox Parts JSON</h1></header>
+<main>
+<aside>
+<div id="drop" class="drop">Drop GLB / GLTF / OBJ / STL / FBX here<br>or click</div>
+<input id="file" type="file" hidden accept=".glb,.gltf,.obj,.stl,.fbx">
+<div id="fileName" style="font-size:12px;color:#8e96a4;margin-top:6px">No file loaded.</div>
+
+<label>Project ID</label><input id="project" value="">
+<label>Model name</label><input id="name" value="ImportedPart">
+
+<label>Detail / voxel resolution</label>
+<input id="res" type="number" min="8" max="128" value="40">
+<label>Roblox studs across largest dimension</label>
+<input id="size" type="number" min=".1" value="20" step=".1">
+<label>Grid / minimum part size</label>
+<input id="grid" type="number" min=".01" value=".5" step=".01">
+
+<label class="check"><input id="anchored" type="checkbox" checked> Anchored</label>
+<label class="check"><input id="collide" type="checkbox" checked> CanCollide</label>
+<label class="check"><input id="shadow" type="checkbox" checked> CastShadow</label>
+<label class="check"><input id="studs" type="checkbox"> Studs on top</label>
+<label class="check"><input id="inlets" type="checkbox"> Inlets on bottom</label>
+
+<label>Material</label>
+<select id="material">
+<option>Plastic</option><option>SmoothPlastic</option><option>Wood</option>
+<option>Metal</option><option>Concrete</option><option>Brick</option>
+<option>Glass</option><option>Neon</option>
+</select>
+
+<label>Output location</label>
+<select id="location">
+<option value="workspace">Workspace</option>
+<option value="map">Workspace.MAP</option>
+</select>
+
+<button id="convert" class="primary" disabled>Convert</button>
+<button id="download" disabled>Download JSON</button>
+<button id="lua" disabled>Download Lua Loader</button>
+<div id="status">Load a model to begin.</div>
+</aside>
+<div id="view"></div>
+</main>
+
+<script type="importmap">
+{"imports":{
+"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+"three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+}}
+</script>
+
+<script type="module">
+import * as THREE from "three";
+import {OrbitControls} from "three/addons/controls/OrbitControls.js";
+import {GLTFLoader} from "three/addons/loaders/GLTFLoader.js";
+import {OBJLoader} from "three/addons/loaders/OBJLoader.js";
+import {STLLoader} from "three/addons/loaders/STLLoader.js";
+import {FBXLoader} from "three/addons/loaders/FBXLoader.js";
+
+const $=id=>document.getElementById(id);
+let source=null,result=null,fileName="";
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x0e1014);
+const camera=new THREE.PerspectiveCamera(50,1,.01,100000);
+camera.position.set(10,8,10);
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+$("view").appendChild(renderer.domElement);
+const controls=new OrbitControls(camera,renderer.domElement);
+controls.enableDamping=true;
+scene.add(new THREE.HemisphereLight(0xffffff,0x444444,2));
+const light=new THREE.DirectionalLight(0xffffff,2);light.position.set(5,10,5);scene.add(light);
+scene.add(new THREE.GridHelper(30,30));
+function resize(){let r=$("view").getBoundingClientRect();renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.updateProjectionMatrix()}
+addEventListener("resize",resize);resize();
+(function loop(){requestAnimationFrame(loop);controls.update();renderer.render(scene,camera)})();
+
+function status(x){$("status").textContent=x}
+
+$("drop").onclick=()=>$("file").click();
+$("file").onchange=e=>e.target.files[0]&&load(e.target.files[0]);
+$("drop").ondragover=e=>e.preventDefault();
+$("drop").ondrop=e=>{e.preventDefault();e.dataTransfer.files[0]&&load(e.dataTransfer.files[0])};
+
+async function load(file){
+ fileName=file.name;$("fileName").textContent=file.name;status("Loading...");
+ try{
+  const url=URL.createObjectURL(file),ext=file.name.toLowerCase().split(".").pop();
+  let obj;
+  if(ext==="glb"||ext==="gltf"){let x=await new GLTFLoader().loadAsync(url);obj=x.scene}
+  else if(ext==="obj")obj=await new OBJLoader().loadAsync(url);
+  else if(ext==="stl"){let g=await new STLLoader().loadAsync(url);obj=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0xaaaaaa}))}
+  else if(ext==="fbx")obj=await new FBXLoader().loadAsync(url);
+  else throw Error("Unsupported file");
+  URL.revokeObjectURL(url);
+  if(source)scene.remove(source);
+  source=obj;scene.add(obj);frame(obj);$("convert").disabled=false;status("Loaded. Press Convert.");
+ }catch(e){console.error(e);status("Error: "+e.message)}
+}
+
+function frame(o){
+ const b=new THREE.Box3().setFromObject(o),c=b.getCenter(new THREE.Vector3()),s=b.getSize(new THREE.Vector3());
+ o.position.sub(c);o.updateMatrixWorld(true);
+ const m=Math.max(s.x,s.y,s.z)||1;o.scale.multiplyScalar(8/m);
+ camera.position.set(11,9,11);controls.target.set(0,0,0);controls.update();
+}
+
+const round=(n,d)=>Math.round(n*10**d)/10**d;
+function vec(v){return{x:round(v.x,3),y:round(v.y,3),z:round(v.z,3)}}
+function color(m){
+ let c=m?.color||new THREE.Color(.7,.7,.7);
+ return {r:round(c.r,3),g:round(c.g,3),b:round(c.b,3),a:1};
+}
+function id(x,y,z,nx,nz){return x+nx*(z+nz*y)}
+
+function triangles(root){
+ const a=[];
+ root.updateMatrixWorld(true);
+ root.traverse(o=>{
+  if(!o.isMesh||!o.geometry.attributes.position)return;
+  let p=o.geometry.attributes.position,i=o.geometry.index,m=Array.isArray(o.material)?o.material[0]:o.material,c=color(m);
+  const A=new THREE.Vector3(),B=new THREE.Vector3(),C=new THREE.Vector3();
+  function add(ia,ib,ic){
+   A.fromBufferAttribute(p,ia).applyMatrix4(o.matrixWorld);
+   B.fromBufferAttribute(p,ib).applyMatrix4(o.matrixWorld);
+   C.fromBufferAttribute(p,ic).applyMatrix4(o.matrixWorld);
+   a.push({a:A.clone(),b:B.clone(),c:C.clone(),color:c});
+  }
+  if(i)for(let n=0;n<i.count;n+=3)add(i.getX(n),i.getX(n+1),i.getX(n+2));
+  else for(let n=0;n<p.count;n+=3)add(n,n+1,n+2);
+ });
+ return a;
+}
+
+function ray(origin,dir,t){
+ const e1=t.b.clone().sub(t.a),e2=t.c.clone().sub(t.a);
+ const h=dir.clone().cross(e2),det=e1.dot(h);
+ if(Math.abs(det)<1e-8)return null;
+ const inv=1/det,s=origin.clone().sub(t.a),u=inv*s.dot(h);
+ if(u<0||u>1)return null;
+ const q=s.clone().cross(e1),v=inv*dir.dot(q);
+ if(v<0||u+v>1)return null;
+ const d=inv*e2.dot(q);return d>1e-8?d:null;
+}
+
+async function voxelize(root){
+ const ts=triangles(root);if(!ts.length)throw Error("Model contains no triangles.");
+ let box=new THREE.Box3();
+ ts.forEach(t=>{box.expandByPoint(t.a);box.expandByPoint(t.b);box.expandByPoint(t.c)});
+ const original=box.getSize(new THREE.Vector3()),largest=Math.max(original.x,original.y,original.z);
+ const world=Number($("size").value)||20,scale=world/largest;
+ ts.forEach(t=>{t.a.multiplyScalar(scale);t.b.multiplyScalar(scale);t.c.multiplyScalar(scale)});
+ box=new THREE.Box3();ts.forEach(t=>{box.expandByPoint(t.a);box.expandByPoint(t.b);box.expandByPoint(t.c)});
+ const center=box.getCenter(new THREE.Vector3()),min=box.min.clone();
+ const shift=new THREE.Vector3(-center.x,-min.y,-center.z);
+ ts.forEach(t=>{t.a.add(shift);t.b.add(shift);t.c.add(shift)});
+ const s=box.getSize(new THREE.Vector3()),r=Math.max(8,Math.min(128,Number($("res").value)||40));
+ const cell=world/r,nx=Math.max(1,Math.ceil(s.x/cell)),ny=Math.max(1,Math.ceil(s.y/cell)),nz=Math.max(1,Math.ceil(s.z/cell));
+ const count=nx*ny*nz;if(count>2000000)throw Error("Too many voxels; lower resolution.");
+ const solid=new Uint8Array(count),cols=new Array(count),dir=new THREE.Vector3(1,0,0);
+ for(let y=0;y<ny;y++){
+  const yy=min.y+shift.y+(y+.5)*cell;
+  for(let z=0;z<nz;z++){
+   const zz=min.z+shift.z+(z+.5)*cell,hits=[];
+   const o=new THREE.Vector3(-world*2,yy,zz);
+   for(const t of ts){let d=ray(o,dir,t);if(d!==null)hits.push({x:o.x+d,color:t.color})}
+   hits.sort((a,b)=>a.x-b.x);
+   for(let k=0;k+1<hits.length;k+=2){
+    let x1=hits[k].x,x2=hits[k+1].x;
+    let lo=Math.max(0,Math.floor((x1-(min.x+shift.x))/cell));
+    let hi=Math.min(nx-1,Math.floor((x2-(min.x+shift.x))/cell));
+    for(let x=lo;x<=hi;x++){let j=id(x,y,z,nx,nz);solid[j]=1;cols[j]??=hits[k].color}
+   }
+  }
+  if(y%2===0){status("Reading vertices / triangles: "+Math.round(y/ny*100)+"%");await new Promise(r=>setTimeout(r,0))}
+ }
+ return{solid,cols,nx,ny,nz,cell,min:min.clone().add(shift)}
+}
+
+function merge(v){
+ const{solid,cols,nx,ny,nz,cell,min}=v,used=new Uint8Array(solid.length),parts=[];
+ function I(x,y,z){return id(x,y,z,nx,nz)}
+ for(let y=0;y<ny;y++)for(let z=0;z<nz;z++)for(let x=0;x<nx;x++){
+  let st=I(x,y,z);if(!solid[st]||used[st])continue;
+  let w=1;
+  while(x+w<nx&&solid[I(x+w,y,z)]&&!used[I(x+w,y,z)])w++;
+  let h=1;
+  while(y+h<ny){
+   let ok=true;for(let xx=x;xx<x+w;xx++)if(!solid[I(xx,y+h,z)]||used[I(xx,y+h,z)]){ok=false;break}
+   if(!ok)break;h++;
+  }
+  let d=1;
+  while(z+d<nz){
+   let ok=true;
+   for(let yy=y;yy<y+h&&ok;yy++)for(let xx=x;xx<x+w;xx++)if(!solid[I(xx,yy,z+d)]||used[I(xx,yy,z+d)]){ok=false;break}
+   if(!ok)break;d++;
+  }
+  let cr=0,cg=0,cb=0,n=0;
+  for(let zz=z;zz<z+d;zz++)for(let yy=y;yy<y+h;yy++)for(let xx=x;xx<x+w;xx++){
+   let j=I(xx,yy,zz);used[j]=1;let c=cols[j]||{r:.7,g:.7,b:.7};cr+=c.r;cg+=c.g;cb+=c.b;n++;
+  }
+  let p={
+   name:$("name").value+"_"+(parts.length+1),
+   position:vec(new THREE.Vector3(min.x+(x+w/2)*cell,min.y+(y+h/2)*cell,min.z+(z+d/2)*cell)),
+   rotation:{x:0,y:0,z:0,w:1},
+   scale:vec(new THREE.Vector3(w*cell,h*cell,d*cell)),
+   color:{r:round(cr/n,3),g:round(cg/n,3),b:round(cb/n,3),a:1},
+   material:$("material").value,
+   group:null,
+   cast_shadow:$("shadow").checked,
+   anchored:$("anchored").checked,
+   can_collide:$("collide").checked,
+   spawn_location:false,
+   baseplate:false,
+   truss:false,
+   textures:[
+    ...($("studs").checked?[{face:"Top",kind:"Studs"}]:[]),
+    ...($("inlets").checked?[{face:"Bottom",kind:"Inlets"}]:[])
+   ]
+  };
+  parts.push(p);
+ }
+ return parts;
+}
+
+function showParts(parts){
+ const old=scene.getObjectByName("__previewParts");if(old)scene.remove(old);
+ const g=new THREE.Group();g.name="__previewParts";
+ for(const p of parts){
+  let m=new THREE.MeshStandardMaterial({color:new THREE.Color(p.color.r,p.color.g,p.color.b)});
+  let q=new THREE.Mesh(new THREE.BoxGeometry(p.scale.x,p.scale.y,p.scale.z),m);
+  q.position.set(p.position.x,p.position.y,p.position.z);g.add(q);
+ }
+ scene.add(g);
+ const b=new THREE.Box3().setFromObject(g),c=b.getCenter(new THREE.Vector3()),s=b.getSize(new THREE.Vector3()),m=Math.max(s.x,s.y,s.z);
+ camera.position.copy(c).add(new THREE.Vector3(m*1.5,m*1.2,m*1.5));controls.target.copy(c);controls.update();
+}
+
+$("convert").onclick=async()=>{
+ $("convert").disabled=true;
+ try{
+  let v=await voxelize(source),parts=merge(v);
+  result={
+   project_id:$("project").value,
+   parts,
+   lights:[{
+    name:"Light",position:{x:50,y:80,z:30},
+    rotation:{x:-.39447,y:.43917,z:.22335,w:.77565},
+    color:{r:.2,g:.2,b:.2,a:1},illuminance:10000,shadows_enabled:true
+   }],
+   groups:[]
+  };
+  $("out")?.remove();
+  let ta=document.createElement("textarea");ta.id="out";ta.readOnly=false;ta.value=JSON.stringify(result,null,2);
+  $("view").appendChild(ta);
+  showParts(parts);
+  status("Done! "+parts.length.toLocaleString()+" individual Parts. No output Model or Folder is created.");
+  $("download").disabled=false;$("lua").disabled=false;
+ }catch(e){console.error(e);status("Conversion error: "+e.message)}
+ $("convert").disabled=false;
+};
+
+$("download").onclick=()=>{
+ let b=new Blob([JSON.stringify(result,null,2)],{type:"application/json"}),a=document.createElement("a");
+ a.href=URL.createObjectURL(b);a.download=fileName.replace(/\.[^.]+$/,"")+".json";a.click();
+};
+
+$("lua").onclick=()=>{
+ const location=$("location").value==="map"
+  ? `local parent = workspace:FindFirstChild("MAP") or Instance.new("Folder")
+parent.Name = "MAP"
+parent.Parent = workspace`
+  : `local parent = workspace`;
+ const text=`-- Generated by 3D → Roblox Parts JSON
+local HttpService = game:GetService("HttpService")
+${location}
+
+local data = HttpService:JSONDecode([==[
+${JSON.stringify(result)}
+]==])
+
+-- Every generated object is a normal Part.
+-- No Model/group is created.
+for _, p in ipairs(data.parts) do
+    local part = Instance.new("Part")
+    part.Name = p.name
+    part.Position = Vector3.new(p.position.x, p.position.y, p.position.z)
+    part.Size = Vector3.new(p.scale.x, p.scale.y, p.scale.z)
+    part.Anchored = p.anchored
+    part.CanCollide = p.can_collide
+    part.CastShadow = p.cast_shadow
+    part.Color = Color3.new(p.color.r, p.color.g, p.color.b)
+
+    local ok, material = pcall(function()
+        return Enum.Material[p.material]
+    end)
+    if ok and material then part.Material = material end
+
+    for _, tex in ipairs(p.textures or {}) do
+        local surface = Enum.SurfaceType.Smooth
+        if tex.kind == "Studs" then surface = Enum.SurfaceType.Studs end
+        if tex.kind == "Inlets" then surface = Enum.SurfaceType.Inlet end
+
+        if tex.face == "Top" then part.TopSurface = surface
+        elseif tex.face == "Bottom" then part.BottomSurface = surface
+        elseif tex.face == "Left" then part.LeftSurface = surface
+        elseif tex.face == "Right" then part.RightSurface = surface
+        elseif tex.face == "Front" then part.FrontSurface = surface
+        elseif tex.face == "Back" then part.BackSurface = surface end
+    end
+
+    part.Parent = parent
+end
+
+print("Loaded "..#data.parts.." individual Parts.")
+`;
+ let b=new Blob([text],{type:"text/plain"}),a=document.createElement("a");
+ a.href=URL.createObjectURL(b);a.download="GeneratedMapLoader.server.lua";a.click();
+};
+</script>
+</body>
+</html>
+'''
+path = Path("/mnt/data/3d_model_to_roblox_parts_redo.html")
+path.write_text(html, encoding="utf-8")
+print(f"[Download the rebuilt converter](sandbox:{path})")
