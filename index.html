@@ -26,11 +26,11 @@ textarea{height:100%;resize:none;font:12px monospace}
 <header><h1>3D Model → Vortex Parts JSON</h1></header>
 <main>
 <aside>
-<div id="drop" class="drop">Drop GLB / GLTF / OBJ / STL / FBX here<br>or click</div>
+<div id="drop" class="drop">Put 3D model file here (preferrably GLB)<br>or click</div>
 <input id="file" type="file" hidden accept=".glb,.gltf,.obj,.stl,.fbx">
 <div id="fileName" style="font-size:12px;color:#8e96a4;margin-top:6px">No file loaded.</div>
 
-<label>Project ID</label><input id="project" value="">
+<label>Project ID (optional)</label><input id="project" value="">
 <label>Model name</label><input id="name" value="ImportedPart">
 
 <label>Detail / voxel resolution</label>
@@ -45,6 +45,8 @@ textarea{height:100%;resize:none;font:12px monospace}
 <label class="check"><input id="shadow" type="checkbox" checked> CastShadow</label>
 <label class="check"><input id="studs" type="checkbox"> Studs on top</label>
 <label class="check"><input id="inlets" type="checkbox"> Inlets on bottom</label>
+ <label class="check"><input id="studsB" type="checkbox"> Studs on bottom</label>
+<label class="check"><input id="inletsB" type="checkbox"> Inlets on top</label>
 
 <label>Material</label>
 <select id="material">
