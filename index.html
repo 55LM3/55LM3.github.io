@@ -296,8 +296,27 @@ $("download").onclick=()=>{
  a.href=URL.createObjectURL(b);a.download=fileName.replace(/\.[^.]+$/,"")+".json";a.click();
 };
 
-$("lua").onclick=()=>{
- load(VortexV6IKMALE.glb)
+$("lua").onclick = async () => {
+  try {
+    status("Loading Vortexian model...");
+
+    const loader = new GLTFLoader();
+    const x = await loader.loadAsync("./VortexV6IKMALE.glb");
+    const obj = x.scene;
+
+    if (source) scene.remove(source);
+
+    source = obj;
+    scene.add(obj);
+
+    frame(obj);
+
+    $("convert").disabled = false;
+    status("Vortexian model loaded. Press Convert.");
+  } catch (e) {
+    console.error(e);
+    status("Error loading Vortexian model: " + e.message);
+  }
 };
 </script>
 </body>
