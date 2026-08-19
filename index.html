@@ -244,7 +244,9 @@ function merge(v){
    truss:false,
    textures:[
     ...($("studs").checked?[{face:"Top",kind:"Studs"}]:[]),
-    ...($("inlets").checked?[{face:"Bottom",kind:"Inlets"}]:[])
+    ...($("inlets").checked?[{face:"Bottom",kind:"Inlets"}]:[]),
+    ...($("inletsB").checked?[{face:"Top",kind:"Inlets"}]:[]),
+    ...($("studsB").checked?[{face:"Bottom",kind:"Studs"}]:[]),
    ]
   };
   parts.push(p);
@@ -349,7 +351,3 @@ print("Loaded "..#data.parts.." individual Parts.")
 </script>
 </body>
 </html>
-
-path = Path("/mnt/data/3d_model_to_Vortex_parts_redo.html")
-path.write_text(html, encoding="utf-8")
-print(f"[Download the rebuilt converter](sandbox:{path})")
