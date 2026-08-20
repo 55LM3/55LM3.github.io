@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>3D Model -> Vortex</title>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#0e1014;color:#eee;font:14px system-ui}
+*{box-sizing:border-box}body{margin:0;background:#1D1E22;color:#eee;font:14px system-ui}
 header{padding:15px 18px;border-bottom:1px solid #292d35}h1{margin:0;font-size:20px}
 main{display:grid;grid-template-columns:320px 1fr;height:calc(100vh - 65px)}
 aside{padding:15px;border-right:1px solid #292d35;overflow:auto}
@@ -20,6 +20,11 @@ button{cursor:pointer;margin-top:8px}button.primary{background:#315bdc;border-co
 textarea{height:100%;resize:none;font:12px monospace}
 #status{color:#aab1bd;font-size:12px;margin-top:8px;line-height:1.4}
 @media(max-width:800px){main{grid-template-columns:1fr;height:auto}aside{border-right:0;border-bottom:1px solid #292d35}#view{height:70vh}}
+
+* {
+  border-radius: 0 !important;
+}
+
 </style>
 </head>
 <body>
@@ -33,11 +38,11 @@ textarea{height:100%;resize:none;font:12px monospace}
 <label>Project ID (optional)</label><input id="project" value="">
 <label>Model name</label><input id="name" value="ImportedPart">
 
-<label>Detail / voxel resolution</label>
+<label>Detail</label>
 <input id="res" type="number" min="8" max="128" value="40">
-<label>Vortex studs across largest dimension</label>
+<label>Size</label>
 <input id="size" type="number" min=".1" value="20" step=".1">
-<label>Grid / minimum part size</label>
+<label>Minimum part size</label>
 <input id="grid" type="number" min=".01" value=".5" step=".01">
 
 <label class="check"><input id="anchored" type="checkbox" checked> Anchored</label>
@@ -50,9 +55,9 @@ textarea{height:100%;resize:none;font:12px monospace}
 
 <label>Material</label>
 <select id="material">
-<option>Plastic</option><option>Smooth</option><option>Wood</option>
-<option>Metal</option><option>Concrete</option><option>Ice</option>
-<option>Grass</option><option>Paint</option>
+<option>Smooth</option><option>Plastic</option><option>Wood</option>
+<option>Metal</option><option>Grass</option><option>Ice</option>
+<option>Paint</option>
 </select>
 
  
