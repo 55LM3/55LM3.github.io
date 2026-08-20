@@ -55,16 +55,18 @@ textarea{height:100%;resize:none;font:12px monospace}
 <option>Grass</option><option>Paint</option>
 </select>
 
-<label>Output location</label>
-<select id="location">
-<option value="workspace">Workspace</option>
-<option value="map">Workspace.MAP</option>
+ 
+<label>EDITOR THEME</label>
+<select id="theme">
+<option value="dark">Dark mode</option>
+<option value="vortexblue">Vortex sky blue</option>
 </select>
+ 
 
 <button id="convert" class="primary" disabled>Convert</button>
 <button id="download" disabled>Download JSON</button>
 <button id="lua">Load Vortexian model</button>
-<div id="status">Load a model to begin.</div>
+<div id="status">Load a model to begin the process</div>
 </aside>
 <div id="view"></div>
 </main>
@@ -239,7 +241,7 @@ function merge(v){
    cast_shadow:$("shadow").checked,
    anchored:$("anchored").checked,
    can_collide:$("collide").checked,
-   spawn_location:false,
+   spawn_:false,
    baseplate:false,
    truss:false,
    textures:[
@@ -285,7 +287,7 @@ $("convert").onclick=async()=>{
   let ta=document.createElement("textarea");ta.id="out";ta.readOnly=false;ta.value=JSON.stringify(result,null,2);
   $("view").appendChild(ta);
   showParts(parts);
-  status("Done! "+parts.length.toLocaleString()+" individual Parts. No output Model or Folder is created.");
+  status("export complete!! "+parts.length.toLocaleString()+" individual Parts in export");
   $("download").disabled=false;$("lua").disabled=false;
  }catch(e){console.error(e);status("Conversion error: "+e.message)}
  $("convert").disabled=false;
@@ -318,6 +320,17 @@ $("lua").onclick = async () => {
     status("Error loading Vortexian model: " + e.message);
   }
 };
+
+
+$("theme").addEventListener("change", () => {
+  if ($("theme").value === "vortexblue") {
+    scene.background.set("#87CEEB");
+  } else {
+    scene.background.set("#0e1014");
+  }
+});
+ 
+ 
 </script>
 </body>
 </html>
