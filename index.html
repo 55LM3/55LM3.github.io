@@ -72,6 +72,7 @@ textarea{height:100%;resize:none;font:12px monospace}
 <button id="download" disabled>Download JSON</button>
 <button id="lua">Load Vortexian model</button>
 <div id="status">Load a model to begin the process</div>
+<button id="wireframe">Toggle wireframe mode</button>
 </aside>
 <div id="view"></div>
 </main>
@@ -324,6 +325,18 @@ $("lua").onclick = async () => {
     console.error(e);
     status("Error loading Vortexian model: " + e.message);
   }
+};
+
+
+$("wireframe").onclick = () => {
+  const g = scene.getObjectByName("__previewParts");
+  if (!g) return;
+
+  g.traverse(o => {
+    if (o.isMesh) {
+      o.material.wireframe = !o.material.wireframe;
+    }
+  });
 };
 
 
