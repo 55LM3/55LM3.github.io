@@ -1,1305 +1,354 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>3D Model / Image -> Vortex</title>
-
+<title>3D Model -> Vortex</title>
 <style>
-:root{
-  --bg:#0b0f14;
-  --panel:#111822;
-  --panel2:#0e141d;
-  --text:#e7eef7;
-  --muted:#8fa2b7;
-  --accent:#6aa8ff;
-  --border:#243244;
+*{box-sizing:border-box}body{margin:0;background:#1D1E22;color:#eee;font:14px system-ui}
+header{padding:15px 18px;border-bottom:1px solid #292d35}h1{margin:0;font-size:20px}
+main{display:grid;grid-template-columns:320px 1fr;height:calc(100vh - 65px)}
+aside{padding:15px;border-right:1px solid #292d35;overflow:auto}
+#view{position:relative;min-width:0}canvas{display:block;width:100%;height:100%}
+label{display:block;margin:10px 0 5px;color:#c7ccd5;font-size:13px}
+input,select,button,textarea{width:100%;padding:9px;border:1px solid #363b46;border-radius:7px;background:#171a20;color:#eee}
+button{cursor:pointer;margin-top:8px}button.primary{background:#315bdc;border-color:#315bdc}
+.drop{border:2px dashed #3b414d;border-radius:9px;padding:22px;text-align:center;color:#aeb5c0;cursor:pointer}
+.check{display:flex;align-items:center;gap:7px}.check input{width:auto}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+#out{position:absolute;left:12px;right:12px;bottom:12px;height:220px;background:#101217cc}
+textarea{height:100%;resize:none;font:12px monospace}
+#status{color:#aab1bd;font-size:12px;margin-top:8px;line-height:1.4}
+@media(max-width:800px){main{grid-template-columns:1fr;height:auto}aside{border-right:0;border-bottom:1px solid #292d35}#view{height:70vh}}
+
+* {
+  border-radius: 0 !important;
 }
 
-*{box-sizing:border-box}
-
-body{
-  margin:0;
-  background:var(--bg);
-  color:var(--text);
-  font-family:Arial,sans-serif;
-}
-
-header{
-  padding:14px 18px;
-  border-bottom:1px solid var(--border);
-  background:var(--panel);
-}
-
-h1{
-  margin:0;
-  font-size:18px;
-}
-
-main{
-  display:grid;
-  grid-template-columns:330px 1fr;
-  height:calc(100vh - 54px);
-}
-
-#controls{
-  padding:14px;
-  overflow:auto;
-  background:var(--panel2);
-  border-right:1px solid var(--border);
-}
-
-label{
-  display:block;
-  margin-top:10px;
-  font-size:12px;
-  color:var(--muted);
-}
-
-input,select,button{
-  width:100%;
-  margin-top:5px;
-  padding:8px;
-  border:1px solid var(--border);
-  border-radius:6px;
-  background:#0b1119;
-  color:var(--text);
-}
-
-button{
-  cursor:pointer;
-}
-
-button:disabled{
-  opacity:.4;
-  cursor:not-allowed;
-}
-
-.drop{
-  padding:20px 10px;
-  margin-bottom:12px;
-  text-align:center;
-  border:1px dashed #3b5068;
-  border-radius:8px;
-  color:var(--muted);
-  cursor:pointer;
-}
-
-.drop.drag{
-  border-color:var(--accent);
-  color:var(--text);
-}
-
-#viewer{
-  position:relative;
-  min-width:0;
-}
-
-canvas{
-  display:block;
-  width:100%;
-  height:100%;
-}
-
-#status{
-  position:absolute;
-  left:12px;
-  bottom:12px;
-  padding:7px 10px;
-  border-radius:6px;
-  background:rgba(0,0,0,.55);
-  font-size:12px;
-  color:var(--muted);
-}
-
-textarea{
-  width:100%;
-  height:180px;
-  margin-top:10px;
-  resize:vertical;
-  background:#080c11;
-  color:#cfe3ff;
-  border:1px solid var(--border);
-  border-radius:6px;
-  padding:8px;
-  font-family:monospace;
-  font-size:11px;
-}
 </style>
 </head>
-
 <body>
-
-<header>
-  <h1>3D Model / Image → Vortex</h1>
-</header>
-
+<header><h1>3D model to Vortex map JSON</h1></header>
 <main>
+<aside>
+<div id="drop" class="drop">Put 3D model file here (preferrably GLB)<br>or click</div>
+<input id="file" type="file" hidden accept=".glb,.gltf,.obj,.stl,.fbx">
+<div id="fileName" style="font-size:12px;color:#8e96a4;margin-top:6px">No file loaded.</div>
 
-<div id="controls">
+<label>Project ID (optional)</label><input id="project" value="">
+<label>Model name</label><input id="name" value="ImportedPart">
 
-  <div id="drop" class="drop">
-    Put 3D model or image here<br>
-    or click
-  </div>
+<label>Detail</label>
+<input id="res" type="number" min="8" max="128" value="40">
+<label>Size</label>
+<input id="size" type="number" min=".1" value="20" step=".1">
+<label>Minimum part size</label>
+<input id="grid" type="number" min=".01" value=".5" step=".01">
 
-  <input
-    id="file"
-    type="file"
-    hidden
-    accept=".glb,.gltf,.obj,.stl,.fbx,.png,.jpg,.jpeg,.webp"
-  >
+<label class="check"><input id="anchored" type="checkbox" checked> Anchored</label>
+<label class="check"><input id="collide" type="checkbox" checked> CanCollide</label>
+<label class="check"><input id="shadow" type="checkbox" checked> CastShadow</label>
+<label class="check"><input id="studs" type="checkbox"> Studs on top</label>
+<label class="check"><input id="inlets" type="checkbox"> Inlets on bottom</label>
+ <label class="check"><input id="studsB" type="checkbox"> Studs on bottom</label>
+<label class="check"><input id="inletsB" type="checkbox"> Inlets on top</label>
 
-  <label>Project ID</label>
-  <input id="project" value="MyProject">
+<label>Material</label>
+<select id="material">
+<option>Smooth</option><option>Plastic</option><option>Wood</option>
+<option>Metal</option><option>Grass</option><option>Ice</option>
+<option>Paint</option>
+</select>
 
-  <label>Model name</label>
-  <input id="name" value="Model">
+ 
+<label>EDITOR THEME</label>
+<select id="theme">
+<option value="dark">Dark mode</option>
+<option value="vortexblue">Vortex sky blue</option>
+</select>
+ 
 
-  <label>Detail res</label>
-  <input id="res" type="number" value="32" min="2" max="128">
-
-  <label>Size</label>
-  <input id="size" type="number" value="20" min="1">
-
-  <label>Minimum part size</label>
-  <input id="minPart" type="number" value="1" min="0">
-
-  <label>Anchored</label>
-  <select id="anchored">
-    <option value="true">true</option>
-    <option value="false">false</option>
-  </select>
-
-  <label>CanCollide</label>
-  <select id="collide">
-    <option value="true">true</option>
-    <option value="false">false</option>
-  </select>
-
-  <label>CastShadow</label>
-  <select id="shadow">
-    <option value="true">true</option>
-    <option value="false">false</option>
-  </select>
-
-  <label>Studs top</label>
-  <input id="studTop" type="number" value="0">
-
-  <label>Inlets bottom</label>
-  <input id="inletBottom" type="number" value="0">
-
-  <label>Studs bottom</label>
-  <input id="studBottom" type="number" value="0">
-
-  <label>Inlets top</label>
-  <input id="inletTop" type="number" value="0">
-
-  <label>Material</label>
-  <select id="material">
-    <option>Plastic</option>
-    <option>Concrete</option>
-    <option>Metal</option>
-    <option>Glass</option>
-    <option>Wood</option>
-  </select>
-
-  <label>Theme</label>
-  <select id="theme">
-    <option value="dark">Dark</option>
-    <option value="light">Light</option>
-  </select>
-
-  <button id="convert" disabled>Convert</button>
-  <button id="download" disabled>Download JSON</button>
-  <button id="lua">Load Vortexian model</button>
-
-  <button id="wire">Toggle wireframe</button>
-
-  <textarea id="output" readonly></textarea>
-
-  <div id="status">Waiting for file...</div>
-
-</div>
-
-<div id="viewer"></div>
-
+<button id="convert" class="primary" disabled>Convert</button>
+<button id="download" disabled>Download JSON</button>
+<button id="lua">Load Vortexian model</button>
+<div id="status">Load a model to begin the process</div>
+<button id="wireframe">Toggle wireframe mode</button>
+</aside>
+<div id="view"></div>
 </main>
 
-<script type="module">
-
-import * as THREE from
-"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
-
-import {OrbitControls} from
-"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js";
-
-import {GLTFLoader} from
-"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js";
-
-import {OBJLoader} from
-"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/OBJLoader.js";
-
-import {STLLoader} from
-"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/STLLoader.js";
-
-import {FBXLoader} from
-"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/FBXLoader.js";
-
-
-const $ = id => document.getElementById(id);
-
-let source = null;
-let sourceType = "model";
-let result = null;
-let fileName = "";
-
-const scene = new THREE.Scene();
-
-const camera = new THREE.PerspectiveCamera(
-  50,
-  1,
-  .1,
-  10000
-);
-
-camera.position.set(80,60,80);
-
-const renderer = new THREE.WebGLRenderer({
-  antialias:true
-});
-
-renderer.setPixelRatio(devicePixelRatio);
-renderer.setSize(
-  $("viewer").clientWidth,
-  $("viewer").clientHeight
-);
-
-$("viewer").appendChild(renderer.domElement);
-
-const controls = new OrbitControls(
-  camera,
-  renderer.domElement
-);
-
-controls.enableDamping = true;
-
-scene.add(new THREE.AmbientLight(0xffffff,.6));
-
-const light = new THREE.DirectionalLight(
-  0xffffff,
-  1.5
-);
-
-light.position.set(50,80,30);
-scene.add(light);
-
-const grid = new THREE.GridHelper(
-  200,
-  40,
-  0x334455,
-  0x22303d
-);
-
-scene.add(grid);
-
-
-function status(text){
-  $("status").textContent = text;
-}
-
-
-function frame(obj){
-
-  const box = new THREE.Box3().setFromObject(obj);
-  const center = box.getCenter(new THREE.Vector3());
-  const size = box.getSize(new THREE.Vector3());
-
-  const max = Math.max(size.x,size.y,size.z);
-
-  obj.position.sub(center);
-
-  camera.position.set(
-    max*1.8,
-    max*1.4,
-    max*1.8
-  );
-
-  controls.target.set(0,0,0);
-  controls.update();
-}
-
-
-function loadImage(file){
-
-  return new Promise((resolve,reject)=>{
-
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-
-    img.onload = ()=>{
-
-      URL.revokeObjectURL(url);
-
-      resolve(img);
-    };
-
-    img.onerror = ()=>{
-
-      URL.revokeObjectURL(url);
-
-      reject(new Error("Could not load image"));
-    };
-
-    img.src = url;
-  });
-}
-
-
-async function load(file){
-
-  fileName = file.name;
-
-  const ext = file.name
-    .split(".")
-    .pop()
-    .toLowerCase();
-
-
-  // IMAGE
-  if(["png","jpg","jpeg","webp"].includes(ext)){
-
-    source = await loadImage(file);
-
-    // IMPORTANT:
-    // source is now a real HTMLImageElement.
-    // drawImage(source, ...) will work.
-    sourceType = "image";
-
-    $("convert").disabled = false;
-
-    status(
-      `Image loaded: ${file.name} (${source.width}x${source.height})`
-    );
-
-    return;
-  }
-
-
-  // MODEL
-  sourceType = "model";
-
-  if(source && source.isObject3D){
-    scene.remove(source);
-  }
-
-  let object;
-
-
-  if(ext === "glb" || ext === "gltf"){
-
-    const loader = new GLTFLoader();
-
-    const gltf = await new Promise((resolve,reject)=>{
-
-      loader.load(
-        URL.createObjectURL(file),
-        resolve,
-        undefined,
-        reject
-      );
-
-    });
-
-    object = gltf.scene;
-
-  }else if(ext === "obj"){
-
-    const loader = new OBJLoader();
-
-    object = await new Promise((resolve,reject)=>{
-
-      loader.load(
-        URL.createObjectURL(file),
-        resolve,
-        undefined,
-        reject
-      );
-
-    });
-
-  }else if(ext === "stl"){
-
-    const loader = new STLLoader();
-
-    const geometry = await new Promise((resolve,reject)=>{
-
-      loader.load(
-        URL.createObjectURL(file),
-        resolve,
-        undefined,
-        reject
-      );
-
-    });
-
-    object = new THREE.Mesh(
-      geometry,
-      new THREE.MeshStandardMaterial({
-        color:0xffffff
-      })
-    );
-
-  }else if(ext === "fbx"){
-
-    const loader = new FBXLoader();
-
-    object = await new Promise((resolve,reject)=>{
-
-      loader.load(
-        URL.createObjectURL(file),
-        resolve,
-        undefined,
-        reject
-      );
-
-    });
-
-  }else{
-
-    throw new Error("Unsupported file type");
-  }
-
-
-  source = object;
-
-  scene.add(source);
-
-  frame(source);
-
-  $("convert").disabled = false;
-
-  status(`Model loaded: ${file.name}`);
-}
-
-
-$("drop").onclick = () => $("file").click();
-
-
-$("file").onchange = async e => {
-
-  if(!e.target.files[0]) return;
-
-  try{
-
-    await load(e.target.files[0]);
-
-  }catch(err){
-
-    console.error(err);
-
-    status("Load error: " + err.message);
-  }
-};
-
-
-$("drop").ondragover = e => {
-
-  e.preventDefault();
-
-  $("drop").classList.add("drag");
-};
-
-
-$("drop").ondragleave = () => {
-
-  $("drop").classList.remove("drag");
-};
-
-
-$("drop").ondrop = async e => {
-
-  e.preventDefault();
-
-  $("drop").classList.remove("drag");
-
-  const file = e.dataTransfer.files[0];
-
-  if(!file) return;
-
-  try{
-
-    await load(file);
-
-  }catch(err){
-
-    console.error(err);
-
-    status("Load error: " + err.message);
-  }
-};
-
-
-function triangles(obj){
-
-  const out = [];
-
-  obj.updateMatrixWorld(true);
-
-  obj.traverse(o => {
-
-    if(!o.isMesh) return;
-
-    const geometry = o.geometry;
-
-    const pos = geometry.attributes.position;
-
-    if(!pos) return;
-
-    const index = geometry.index;
-
-    const a = new THREE.Vector3();
-    const b = new THREE.Vector3();
-    const c = new THREE.Vector3();
-
-    const matrix = o.matrixWorld;
-
-    const count = index
-      ? index.count
-      : pos.count;
-
-
-    for(let i=0;i<count;i+=3){
-
-      const ia = index ? index.getX(i) : i;
-      const ib = index ? index.getX(i+1) : i+1;
-      const ic = index ? index.getX(i+2) : i+2;
-
-      a.fromBufferAttribute(pos,ia).applyMatrix4(matrix);
-      b.fromBufferAttribute(pos,ib).applyMatrix4(matrix);
-      c.fromBufferAttribute(pos,ic).applyMatrix4(matrix);
-
-      out.push([a.clone(),b.clone(),c.clone()]);
-    }
-  });
-
-  return out;
-}
-
-
-const ray = new THREE.Ray();
-
-
-function voxelize(obj){
-
-  const tris = triangles(obj);
-
-  const box = new THREE.Box3().setFromObject(obj);
-
-  const size = box.getSize(new THREE.Vector3());
-
-  const res = Math.max(
-    2,
-    Number($("res").value) || 32
-  );
-
-  const maxSize = Math.max(
-    size.x,
-    size.y,
-    size.z
-  );
-
-  const cell = maxSize / res;
-
-  const min = box.min.clone();
-
-  const voxels = [];
-
-  for(let x=0;x<res;x++){
-
-    for(let y=0;y<res;y++){
-
-      for(let z=0;z<res;z++){
-
-        const center = new THREE.Vector3(
-          min.x + (x+.5)*cell,
-          min.y + (y+.5)*cell,
-          min.z + (z+.5)*cell
-        );
-
-        ray.origin.copy(center);
-
-        ray.direction.set(1,0,0);
-
-        let hits = 0;
-
-        for(const t of tris){
-
-          const hit = ray.intersectTriangle(
-            t[0],
-            t[1],
-            t[2],
-            false,
-            new THREE.Vector3()
-          );
-
-          if(hit) hits++;
-        }
-
-        if(hits % 2 === 1){
-
-          voxels.push({
-            x,
-            y,
-            z,
-            center,
-            size:cell
-          });
-        }
-      }
-    }
-  }
-
-  return voxels;
-}
-
-
-function merge(voxels){
-
-  const parts = [];
-
-  const minPart =
-    Number($("minPart").value) || 1;
-
-  const size =
-    Number($("size").value) || 20;
-
-  if(!voxels.length) return parts;
-
-  const box = new THREE.Box3();
-
-  for(const v of voxels){
-
-    box.expandByPoint(v.center);
-  }
-
-  const boxSize =
-    box.getSize(new THREE.Vector3());
-
-  const scale =
-    size /
-    Math.max(
-      boxSize.x,
-      boxSize.y,
-      boxSize.z,
-      .001
-    );
-
-
-  for(const v of voxels){
-
-    const s = Math.max(
-      v.size * scale,
-      minPart
-    );
-
-    parts.push({
-
-      name:
-        `${$("name").value}_${parts.length}`,
-
-      position:{
-        x:+(v.center.x * scale).toFixed(4),
-        y:+(v.center.y * scale).toFixed(4),
-        z:+(v.center.z * scale).toFixed(4)
-      },
-
-      rotation:{
-        x:0,
-        y:0,
-        z:0,
-        w:1
-      },
-
-      scale:{
-        x:+s.toFixed(4),
-        y:+s.toFixed(4),
-        z:+s.toFixed(4)
-      },
-
-      color:{
-        r:1,
-        g:1,
-        b:1,
-        a:1
-      },
-
-      material:$("material").value,
-
-      group:"",
-
-      cast_shadow:
-        $("shadow").value === "true",
-
-      anchored:
-        $("anchored").value === "true",
-
-      can_collide:
-        $("collide").value === "true",
-
-      spawn_:false,
-
-      baseplate:false,
-
-      truss:false,
-
-      textures:{
-        top:{
-          studs:Number($("studTop").value)||0,
-          inlets:Number($("inletTop").value)||0
-        },
-
-        bottom:{
-          studs:Number($("studBottom").value)||0,
-          inlets:Number($("inletBottom").value)||0
-        }
-      }
-    });
-  }
-
-  return parts;
-}
-
-
-/*
-  IMAGE -> PARTS
-
-  The image itself is NOT placed into the JSON.
-
-  Every visible pixel becomes a normal Vortex part.
-*/
-async function imageToParts(img){
-
-  const max =
-    Math.max(
-      1,
-      Number($("res").value) || 32
-    );
-
-  const aspect =
-    img.width / img.height;
-
-  let w;
-  let h;
-
-
-  if(img.width >= img.height){
-
-    w = max;
-
-    h = Math.max(
-      1,
-      Math.round(max / aspect)
-    );
-
-  }else{
-
-    h = max;
-
-    w = Math.max(
-      1,
-      Math.round(max * aspect)
-    );
-  }
-
-
-  const canvas =
-    document.createElement("canvas");
-
-  canvas.width = w;
-  canvas.height = h;
-
-
-  const ctx =
-    canvas.getContext(
-      "2d",
-      {willReadFrequently:true}
-    );
-
-
-  // FIX:
-  // img is the actual HTMLImageElement.
-  ctx.drawImage(
-    img,
-    0,
-    0,
-    w,
-    h
-  );
-
-
-  const data =
-    ctx.getImageData(
-      0,
-      0,
-      w,
-      h
-    ).data;
-
-
-  const size =
-    Number($("size").value) || 20;
-
-
-  const partSize =
-    size / Math.max(w,h);
-
-
-  const parts = [];
-
-
-  for(let y=0;y<h;y++){
-
-    for(let x=0;x<w;x++){
-
-      const i =
-        (y*w+x)*4;
-
-
-      const r = data[i];
-      const g = data[i+1];
-      const b = data[i+2];
-      const a = data[i+3];
-
-
-      // Ignore transparent pixels.
-      if(a < 10) continue;
-
-
-      const px =
-        (x - (w-1)/2) *
-        partSize;
-
-      const py =
-        ((h-1-y) - (h-1)/2) *
-        partSize;
-
-
-      parts.push({
-
-        name:
-          `${$("name").value}_${parts.length}`,
-
-        position:{
-          x:+px.toFixed(4),
-          y:+py.toFixed(4),
-          z:0
-        },
-
-        rotation:{
-          x:0,
-          y:0,
-          z:0,
-          w:1
-        },
-
-        scale:{
-          x:partSize,
-          y:partSize,
-          z:partSize
-        },
-
-        color:{
-          r:r/255,
-          g:g/255,
-          b:b/255,
-          a:a/255
-        },
-
-        material:$("material").value,
-
-        group:"",
-
-        cast_shadow:
-          $("shadow").value === "true",
-
-        anchored:
-          $("anchored").value === "true",
-
-        can_collide:
-          $("collide").value === "true",
-
-        spawn_:false,
-
-        baseplate:false,
-
-        truss:false,
-
-        textures:{
-          top:{
-            studs:Number($("studTop").value)||0,
-            inlets:Number($("inletTop").value)||0
-          },
-
-          bottom:{
-            studs:Number($("studBottom").value)||0,
-            inlets:Number($("inletBottom").value)||0
-          }
-        }
-      });
-    }
-  }
-
-
-  return parts;
-}
-
-
-function showParts(parts){
-
-  if(window.__previewParts){
-
-    scene.remove(
-      window.__previewParts
-    );
-  }
-
-
-  const group =
-    new THREE.Group();
-
-
-  for(const p of parts){
-
-    const geometry =
-      new THREE.BoxGeometry(
-        p.scale.x,
-        p.scale.y,
-        p.scale.z
-      );
-
-
-    const material =
-      new THREE.MeshStandardMaterial({
-
-        color:
-          new THREE.Color(
-            p.color.r,
-            p.color.g,
-            p.color.b
-          ),
-
-        transparent:
-          p.color.a < 1,
-
-        opacity:
-          p.color.a
-      });
-
-
-    const mesh =
-      new THREE.Mesh(
-        geometry,
-        material
-      );
-
-
-    mesh.position.set(
-      p.position.x,
-      p.position.y,
-      p.position.z
-    );
-
-
-    group.add(mesh);
-  }
-
-
-  scene.add(group);
-
-  window.__previewParts = group;
-
-  frame(group);
-}
-
-
-$("convert").onclick = async ()=>{
-
-  if(!source) return;
-
-
-  try{
-
-    status("Converting...");
-
-    let parts;
-
-
-    if(sourceType === "image"){
-
-      parts =
-        await imageToParts(source);
-
-    }else{
-
-      const v =
-        voxelize(source);
-
-      parts =
-        merge(v);
-    }
-
-
-    result = {
-
-      project_id:
-        $("project").value,
-
-      parts,
-
-      lights:[{
-
-        name:"Light",
-
-        position:{
-          x:50,
-          y:80,
-          z:30
-        },
-
-        rotation:{
-          x:-.39447,
-          y:.43917,
-          z:.22335,
-          w:.77565
-        },
-
-        color:{
-          r:.2,
-          g:.2,
-          b:.2,
-          a:1
-        },
-
-        illuminance:10000,
-
-        shadows_enabled:true
-      }],
-
-      groups:[]
-    };
-
-
-    $("output").value =
-      JSON.stringify(
-        result,
-        null,
-        2
-      );
-
-
-    $("download").disabled = false;
-
-    showParts(parts);
-
-    status(
-      `Done. ${parts.length} parts created.`
-    );
-
-
-  }catch(err){
-
-    console.error(err);
-
-    status(
-      "Conversion error: " +
-      err.message
-    );
-  }
-};
-
-
-$("download").onclick = ()=>{
-
-  if(!result) return;
-
-
-  const blob =
-    new Blob(
-      [
-        JSON.stringify(
-          result,
-          null,
-          2
-        )
-      ],
-      {
-        type:"application/json"
-      }
-    );
-
-
-  const url =
-    URL.createObjectURL(blob);
-
-
-  const a =
-    document.createElement("a");
-
-  a.href = url;
-
-  a.download =
-    fileName.replace(
-      /\.[^.]+$/,
-      ""
-    ) + ".json";
-
-  a.click();
-
-  URL.revokeObjectURL(url);
-};
-
-
-$("lua").onclick = async ()=>{
-
-  try{
-
-    const loader =
-      new GLTFLoader();
-
-
-    const gltf =
-      await new Promise(
-        (resolve,reject)=>{
-
-          loader.load(
-            "./VortexV6IKMALE.glb",
-            resolve,
-            undefined,
-            reject
-          );
-
-        }
-      );
-
-
-    if(source && source.isObject3D){
-
-      scene.remove(source);
-    }
-
-
-    source =
-      gltf.scene;
-
-    sourceType =
-      "model";
-
-
-    scene.add(source);
-
-    frame(source);
-
-    $("convert").disabled = false;
-
-    status(
-      "Vortexian model loaded."
-    );
-
-
-  }catch(err){
-
-    console.error(err);
-
-    status(
-      "Could not load Vortexian model."
-    );
-  }
-};
-
-
-let wireframe = false;
-
-
-$("wire").onclick = ()=>{
-
-  wireframe =
-    !wireframe;
-
-
-  if(window.__previewParts){
-
-    window.__previewParts.traverse(
-      o => {
-
-        if(o.material){
-
-          o.material.wireframe =
-            wireframe;
-        }
-      }
-    );
-  }
-};
-
-
-$("theme").onchange = ()=>{
-
-  if($("theme").value === "light"){
-
-    scene.background =
-      new THREE.Color(0xe8edf2);
-
-  }else{
-
-    scene.background =
-      new THREE.Color(0x0b0f14);
-  }
-};
-
-
-window.addEventListener(
-  "resize",
-  ()=>{
-
-    const w =
-      $("viewer").clientWidth;
-
-    const h =
-      $("viewer").clientHeight;
-
-
-    camera.aspect =
-      w/h;
-
-    camera.updateProjectionMatrix();
-
-    renderer.setSize(
-      w,
-      h
-    );
-  }
-);
-
-
-function animate(){
-
-  requestAnimationFrame(
-    animate
-  );
-
-  controls.update();
-
-  renderer.render(
-    scene,
-    camera
-  );
-}
-
-
-animate();
-
+<script type="importmap">
+{"imports":{
+"three":"https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+"three/addons/":"https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/"
+}}
 </script>
 
+<script type="module">
+import * as THREE from "three";
+import {OrbitControls} from "three/addons/controls/OrbitControls.js";
+import {GLTFLoader} from "three/addons/loaders/GLTFLoader.js";
+import {OBJLoader} from "three/addons/loaders/OBJLoader.js";
+import {STLLoader} from "three/addons/loaders/STLLoader.js";
+import {FBXLoader} from "three/addons/loaders/FBXLoader.js";
+
+const $=id=>document.getElementById(id);
+let source=null,result=null,fileName="";
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x0e1014);
+const camera=new THREE.PerspectiveCamera(50,1,.01,100000);
+camera.position.set(10,8,10);
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.outputColorSpace=THREE.SRGBColorSpace;
+$("view").appendChild(renderer.domElement);
+const controls=new OrbitControls(camera,renderer.domElement);
+controls.enableDamping=true;
+scene.add(new THREE.HemisphereLight(0xffffff,0x444444,2));
+const light=new THREE.DirectionalLight(0xffffff,2);light.position.set(5,10,5);scene.add(light);
+scene.add(new THREE.GridHelper(30,30));
+function resize(){let r=$("view").getBoundingClientRect();renderer.setSize(r.width,r.height,false);camera.aspect=r.width/r.height;camera.updateProjectionMatrix()}
+addEventListener("resize",resize);resize();
+(function loop(){requestAnimationFrame(loop);controls.update();renderer.render(scene,camera)})();
+
+function status(x){$("status").textContent=x}
+
+$("drop").onclick=()=>$("file").click();
+$("file").onchange=e=>e.target.files[0]&&load(e.target.files[0]);
+$("drop").ondragover=e=>e.preventDefault();
+$("drop").ondrop=e=>{e.preventDefault();e.dataTransfer.files[0]&&load(e.dataTransfer.files[0])};
+
+async function load(file){
+ fileName=file.name;$("fileName").textContent=file.name;status("Loading...");
+ try{
+  const url=URL.createObjectURL(file),ext=file.name.toLowerCase().split(".").pop();
+  let obj;
+  if(ext==="glb"||ext==="gltf"){let x=await new GLTFLoader().loadAsync(url);obj=x.scene}
+  else if(ext==="obj")obj=await new OBJLoader().loadAsync(url);
+  else if(ext==="stl"){let g=await new STLLoader().loadAsync(url);obj=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:0xaaaaaa}))}
+  else if(ext==="fbx")obj=await new FBXLoader().loadAsync(url);
+  else throw Error("Unsupported file");
+  URL.revokeObjectURL(url);
+  if(source)scene.remove(source);
+  source=obj;scene.add(obj);frame(obj);$("convert").disabled=false;status("Loaded. Press Convert.");
+ }catch(e){console.error(e);status("Error: "+e.message)}
+}
+
+function frame(o){
+ const b=new THREE.Box3().setFromObject(o),c=b.getCenter(new THREE.Vector3()),s=b.getSize(new THREE.Vector3());
+ o.position.sub(c);o.updateMatrixWorld(true);
+ const m=Math.max(s.x,s.y,s.z)||1;o.scale.multiplyScalar(8/m);
+ camera.position.set(11,9,11);controls.target.set(0,0,0);controls.update();
+}
+
+const round=(n,d)=>Math.round(n*10**d)/10**d;
+function vec(v){return{x:round(v.x,3),y:round(v.y,3),z:round(v.z,3)}}
+function color(m){
+ let c=m?.color||new THREE.Color(.7,.7,.7);
+ return {r:round(c.r,3),g:round(c.g,3),b:round(c.b,3),a:1};
+}
+function id(x,y,z,nx,nz){return x+nx*(z+nz*y)}
+
+function triangles(root){
+ const a=[];
+ root.updateMatrixWorld(true);
+ root.traverse(o=>{
+  if(!o.isMesh||!o.geometry.attributes.position)return;
+  let p=o.geometry.attributes.position,i=o.geometry.index,m=Array.isArray(o.material)?o.material[0]:o.material,c=color(m);
+  const A=new THREE.Vector3(),B=new THREE.Vector3(),C=new THREE.Vector3();
+  function add(ia,ib,ic){
+   A.fromBufferAttribute(p,ia).applyMatrix4(o.matrixWorld);
+   B.fromBufferAttribute(p,ib).applyMatrix4(o.matrixWorld);
+   C.fromBufferAttribute(p,ic).applyMatrix4(o.matrixWorld);
+   a.push({a:A.clone(),b:B.clone(),c:C.clone(),color:c});
+  }
+  if(i)for(let n=0;n<i.count;n+=3)add(i.getX(n),i.getX(n+1),i.getX(n+2));
+  else for(let n=0;n<p.count;n+=3)add(n,n+1,n+2);
+ });
+ return a;
+}
+
+function ray(origin,dir,t){
+ const e1=t.b.clone().sub(t.a),e2=t.c.clone().sub(t.a);
+ const h=dir.clone().cross(e2),det=e1.dot(h);
+ if(Math.abs(det)<1e-8)return null;
+ const inv=1/det,s=origin.clone().sub(t.a),u=inv*s.dot(h);
+ if(u<0||u>1)return null;
+ const q=s.clone().cross(e1),v=inv*dir.dot(q);
+ if(v<0||u+v>1)return null;
+ const d=inv*e2.dot(q);return d>1e-8?d:null;
+}
+
+async function voxelize(root){
+ const ts=triangles(root);if(!ts.length)throw Error("Model contains no triangles.");
+ let box=new THREE.Box3();
+ ts.forEach(t=>{box.expandByPoint(t.a);box.expandByPoint(t.b);box.expandByPoint(t.c)});
+ const original=box.getSize(new THREE.Vector3()),largest=Math.max(original.x,original.y,original.z);
+ const world=Number($("size").value)||20,scale=world/largest;
+ ts.forEach(t=>{t.a.multiplyScalar(scale);t.b.multiplyScalar(scale);t.c.multiplyScalar(scale)});
+ box=new THREE.Box3();ts.forEach(t=>{box.expandByPoint(t.a);box.expandByPoint(t.b);box.expandByPoint(t.c)});
+ const center=box.getCenter(new THREE.Vector3()),min=box.min.clone();
+ const shift=new THREE.Vector3(-center.x,-min.y,-center.z);
+ ts.forEach(t=>{t.a.add(shift);t.b.add(shift);t.c.add(shift)});
+ const s=box.getSize(new THREE.Vector3()),r=Math.max(8,Math.min(128,Number($("res").value)||40));
+ const cell=world/r,nx=Math.max(1,Math.ceil(s.x/cell)),ny=Math.max(1,Math.ceil(s.y/cell)),nz=Math.max(1,Math.ceil(s.z/cell));
+ const count=nx*ny*nz;if(count>2000000)throw Error("Too many voxels; lower resolution.");
+ const solid=new Uint8Array(count),cols=new Array(count),dir=new THREE.Vector3(1,0,0);
+ for(let y=0;y<ny;y++){
+  const yy=min.y+shift.y+(y+.5)*cell;
+  for(let z=0;z<nz;z++){
+   const zz=min.z+shift.z+(z+.5)*cell,hits=[];
+   const o=new THREE.Vector3(-world*2,yy,zz);
+   for(const t of ts){let d=ray(o,dir,t);if(d!==null)hits.push({x:o.x+d,color:t.color})}
+   hits.sort((a,b)=>a.x-b.x);
+   for(let k=0;k+1<hits.length;k+=2){
+    let x1=hits[k].x,x2=hits[k+1].x;
+    let lo=Math.max(0,Math.floor((x1-(min.x+shift.x))/cell));
+    let hi=Math.min(nx-1,Math.floor((x2-(min.x+shift.x))/cell));
+    for(let x=lo;x<=hi;x++){let j=id(x,y,z,nx,nz);solid[j]=1;cols[j]??=hits[k].color}
+   }
+  }
+  if(y%2===0){status("Reading vertices / triangles: "+Math.round(y/ny*100)+"%");await new Promise(r=>setTimeout(r,0))}
+ }
+ return{solid,cols,nx,ny,nz,cell,min:min.clone().add(shift)}
+}
+
+function merge(v){
+ const{solid,cols,nx,ny,nz,cell,min}=v,used=new Uint8Array(solid.length),parts=[];
+ function I(x,y,z){return id(x,y,z,nx,nz)}
+ for(let y=0;y<ny;y++)for(let z=0;z<nz;z++)for(let x=0;x<nx;x++){
+  let st=I(x,y,z);if(!solid[st]||used[st])continue;
+  let w=1;
+  while(x+w<nx&&solid[I(x+w,y,z)]&&!used[I(x+w,y,z)])w++;
+  let h=1;
+  while(y+h<ny){
+   let ok=true;for(let xx=x;xx<x+w;xx++)if(!solid[I(xx,y+h,z)]||used[I(xx,y+h,z)]){ok=false;break}
+   if(!ok)break;h++;
+  }
+  let d=1;
+  while(z+d<nz){
+   let ok=true;
+   for(let yy=y;yy<y+h&&ok;yy++)for(let xx=x;xx<x+w;xx++)if(!solid[I(xx,yy,z+d)]||used[I(xx,yy,z+d)]){ok=false;break}
+   if(!ok)break;d++;
+  }
+  let cr=0,cg=0,cb=0,n=0;
+  for(let zz=z;zz<z+d;zz++)for(let yy=y;yy<y+h;yy++)for(let xx=x;xx<x+w;xx++){
+   let j=I(xx,yy,zz);used[j]=1;let c=cols[j]||{r:.7,g:.7,b:.7};cr+=c.r;cg+=c.g;cb+=c.b;n++;
+  }
+  let p={
+   name:$("name").value+"_"+(parts.length+1),
+   position:vec(new THREE.Vector3(min.x+(x+w/2)*cell,min.y+(y+h/2)*cell,min.z+(z+d/2)*cell)),
+   rotation:{x:0,y:0,z:0,w:1},
+   scale:vec(new THREE.Vector3(w*cell,h*cell,d*cell)),
+   color:{r:round(cr/n,3),g:round(cg/n,3),b:round(cb/n,3),a:1},
+   material:$("material").value,
+   group:null,
+   cast_shadow:$("shadow").checked,
+   anchored:$("anchored").checked,
+   can_collide:$("collide").checked,
+   spawn_:false,
+   baseplate:false,
+   truss:false,
+   textures:[
+    ...($("studs").checked?[{face:"Top",kind:"Studs"}]:[]),
+    ...($("inlets").checked?[{face:"Bottom",kind:"Inlets"}]:[]),
+    ...($("inletsB").checked?[{face:"Top",kind:"Inlets"}]:[]),
+    ...($("studsB").checked?[{face:"Bottom",kind:"Studs"}]:[]),
+   ]
+  };
+  parts.push(p);
+ }
+ return parts;
+}
+
+function showParts(parts){
+ const old=scene.getObjectByName("__previewParts");if(old)scene.remove(old);
+ const g=new THREE.Group();g.name="__previewParts";
+ for(const p of parts){
+  let m=new THREE.MeshStandardMaterial({color:new THREE.Color(p.color.r,p.color.g,p.color.b)});
+  let q=new THREE.Mesh(new THREE.BoxGeometry(p.scale.x,p.scale.y,p.scale.z),m);
+  q.position.set(p.position.x,p.position.y,p.position.z);g.add(q);
+ }
+ scene.add(g);
+ const b=new THREE.Box3().setFromObject(g),c=b.getCenter(new THREE.Vector3()),s=b.getSize(new THREE.Vector3()),m=Math.max(s.x,s.y,s.z);
+ camera.position.copy(c).add(new THREE.Vector3(m*1.5,m*1.2,m*1.5));controls.target.copy(c);controls.update();
+}
+
+$("convert").onclick=async()=>{
+ $("convert").disabled=true;
+ try{
+  let v=await voxelize(source),parts=merge(v);
+  result={
+   project_id:$("project").value,
+   parts,
+   lights:[{
+    name:"Light",position:{x:50,y:80,z:30},
+    rotation:{x:-.39447,y:.43917,z:.22335,w:.77565},
+    color:{r:.2,g:.2,b:.2,a:1},illuminance:10000,shadows_enabled:true
+   }],
+   groups:[]
+  };
+  $("out")?.remove();
+  let ta=document.createElement("textarea");ta.id="out";ta.readOnly=false;ta.value=JSON.stringify(result,null,2);
+  $("view").appendChild(ta);
+  showParts(parts);
+  status("export complete!! "+parts.length.toLocaleString()+" individual Parts in export");
+  $("download").disabled=false;$("lua").disabled=false;
+ }catch(e){console.error(e);status("Conversion error: "+e.message)}
+ $("convert").disabled=false;
+};
+
+$("download").onclick=()=>{
+ let b=new Blob([JSON.stringify(result,null,2)],{type:"application/json"}),a=document.createElement("a");
+ a.href=URL.createObjectURL(b);a.download=fileName.replace(/\.[^.]+$/,"")+".json";a.click();
+};
+
+$("lua").onclick = async () => {
+  try {
+    status("Loading Vortexian model...");
+
+    const loader = new GLTFLoader();
+    const x = await loader.loadAsync("./VortexV6IKMALE.glb");
+    const obj = x.scene;
+
+    if (source) scene.remove(source);
+
+    source = obj;
+    scene.add(obj);
+
+    frame(obj);
+
+    $("convert").disabled = false;
+    status("Vortexian model loaded. Press Convert.");
+  } catch (e) {
+    console.error(e);
+    status("Error loading Vortexian model: " + e.message);
+  }
+};
+
+
+$("wireframe").onclick = () => {
+  const g = scene.getObjectByName("__previewParts");
+  if (!g) return;
+
+  g.traverse(o => {
+    if (o.isMesh) {
+      o.material.wireframe = !o.material.wireframe;
+    }
+  });
+};
+
+
+$("theme").addEventListener("change", () => {
+  if ($("theme").value === "vortexblue") {
+    scene.background.set("#87CEEB");
+  } else {
+    scene.background.set("#0e1014");
+  }
+});
+ 
+ 
+</script>
 </body>
 </html>
